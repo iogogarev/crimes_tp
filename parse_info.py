@@ -6,53 +6,57 @@ import pickle
 from joblib import dump, load
 from sklearn.ensemble import RandomForestClassifier
 import sys
+import os.path
 
 def parse_date(s):
     res = {}
-    dates = s.split()
-    year = int((dates[0].split('-'))[0])
-    res['year'] = year
-    month = int((dates[0].split('-'))[1])
-    res['month'] = month
-    day = int((dates[0].split('-'))[2])
-    res['day'] = day
-    hour = int((dates[1].split(':'))[0])
-    res['hour'] = hour
-    minute = int((dates[1].split(':'))[1])
-    res['minutes'] = minute
+    try:
+        dates = s.split()
+        year = int((dates[0].split('-'))[0])
+        res['year'] = year
+        month = int((dates[0].split('-'))[1])
+        res['month'] = month
+        day = int((dates[0].split('-'))[2])
+        res['day'] = day
+        hour = int((dates[1].split(':'))[0])
+        res['hour'] = hour
+        minute = int((dates[1].split(':'))[1])
+        res['minutes'] = minute
 
-    if(minute == 30 or minute == 0):
-        res['beautiful_endings'] = 1
-    else:
-        res['beautiful_endings'] = 0
+        if(minute == 30 or minute == 0):
+            res['beautiful_endings'] = 1
+        else:
+            res['beautiful_endings'] = 0
 
-    weekday = calendar.day_abbr[datetime.date(year, month, day).weekday()]
-    res['weekday'] = weekday
-    if(weekday == 'Sun' or weekday == 'Sat'):
-        res['is_weekends'] = 1
-    else:
-        res['is_weekends'] = 0
-    if(hour > 22 or (hour < 6)):
-        res['nights'] = 1
-        res['mornings'] = 0
-        res['middle_days'] = 0
-        res['afternoons'] = 0
-    elif(hour >=6 and hour <= 10):
-        res['nights'] = 0
-        res['mornings'] = 1
-        res['middle_days'] = 0
-        res['afternoons'] = 0
-    elif(hour > 10 and hour <=17):
-        res['nights'] = 0
-        res['mornings'] = 0
-        res['middle_days'] = 1
-        res['afternoons'] = 0
-    else:
-        res['nights'] = 0
-        res['mornings'] = 0
-        res['middle_days'] = 0
-        res['afternoons'] = 1
-
+        weekday = calendar.day_abbr[datetime.date(year, month, day).weekday()]
+        res['weekday'] = weekday
+        if(weekday == 'Sun' or weekday == 'Sat'):
+            res['is_weekends'] = 1
+        else:
+            res['is_weekends'] = 0
+        if(hour > 22 or (hour < 6)):
+            res['nights'] = 1
+            res['mornings'] = 0
+            res['middle_days'] = 0
+            res['afternoons'] = 0
+        elif(hour >=6 and hour <= 10):
+            res['nights'] = 0
+            res['mornings'] = 1
+            res['middle_days'] = 0
+            res['afternoons'] = 0
+        elif(hour > 10 and hour <=17):
+            res['nights'] = 0
+            res['mornings'] = 0
+            res['middle_days'] = 1
+            res['afternoons'] = 0
+        else:
+            res['nights'] = 0
+            res['mornings'] = 0
+            res['middle_days'] = 0
+            res['afternoons'] = 1
+    except:
+        print('Wrong date format (correct : \'yyyy:mm:dd hh:ss\')')
+        return None
     return res
 
 
@@ -70,7 +74,20 @@ def make_zones(X, Y, maxX = -122.365240723693, maxY = 37.819975492297004,
         y_zone = 14
     return (15*x_zone+y_zone)
 
-def parse_info(X, Y, date, district_clf, clf, address = ""):
+def parse_info(X, Y, date, district_clf, clf):
+    try:
+        X = float(X)
+    except:
+        print("X must be float (first argument)!")
+        return
+    try:
+        Y = float(Y)
+    except:
+        print("Y must be float (second argument)!")
+        return
+
+
+    Y = float(Y)
     my_file = open("columns.txt")
     cols = my_file.read()
     my_file.close()
@@ -79,6 +96,8 @@ def parse_info(X, Y, date, district_clf, clf, address = ""):
     line = pd.DataFrame([arr], columns = columns)
     d = {}
     res = parse_date(date)
+    if not res:
+        return
     line['X'][0] = X
     line['Y'][0] = Y
 
@@ -155,7 +174,7 @@ def parse_info(X, Y, date, district_clf, clf, address = ""):
     line['XY5'][0] = (X - X_median) ** 2 + (Y - Y_median) ** 2
 
     line['XY_rad'][0] = np.sqrt(np.power(Y, 2) + np.power(X, 2))
-     d = {}
+    d = {}
     predicted = clf.predict_proba(line)[0]
     for i in range(len(clf.classes_)):
         d[clf.classes_[i]] = predicted[i]
@@ -166,16 +185,27 @@ def parse_info(X, Y, date, district_clf, clf, address = ""):
         sorted_dict[w] = d[w]
     s = ''
     keys = list(sorted_dict.keys())
-    display(keys)
     values = list(sorted_dict.values())
     for i in range(3):
         s += str(keys[len(keys) - 1 - i]) + ':' + str(values[len(keys) - 1 - i]) + '\n'
-    display(sorted_dict)
 
     return s
 
+if not os.path.exists('model.joblib'):
+    print('File model.joblib not found')
 
-clf = load('model.joblib')
-district_clf = load('district_model.joblib')
-arguments = sys.argv[1:]
-parse_info(arguments[0], arguments[1], arguments[2], district_clf, clf)
+elif not os.path.exists('district_model.joblib'):
+    print('File district_model.joblib not found')
+
+elif not os.path.exists('columns.txt'):
+    print('File columns.txt not found')
+
+else:
+    clf = load('model.joblib')
+    district_clf = load('district_model.joblib')
+    arguments = sys.argv[1:]
+    f = open("info.txt", "w")
+    answer = parse_info(arguments[0], arguments[1], arguments[2] + ' ' + arguments[3], district_clf, clf)
+    if(answer):
+        f.write(answer)
+    f.close()
